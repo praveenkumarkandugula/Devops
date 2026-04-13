@@ -7,13 +7,13 @@ variable "location" {
 variable "linux_vm_size" {
   description = "VM SKU to use for the Linux VM in dev."
   type        = string
-  default     = "Standard_A2_v2"
+  default     = "Standard_B2s"
 }
 
 variable "windows_vm_size" {
   description = "VM SKU to use for the Windows VM in dev."
   type        = string
-  default     = "Standard_A2_v2"
+  default     = "Standard_B2s"
 }
 
 variable "vm_admin_username" {

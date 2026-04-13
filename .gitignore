@@ -4,6 +4,7 @@
 *.tfstate.backup
 .terraform.lock.hcl
 crash.log
+plan_output.txt
 
 # IDE
 .vscode/

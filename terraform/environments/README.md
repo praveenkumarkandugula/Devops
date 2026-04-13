@@ -31,14 +31,16 @@ environments/
 
 **Key Features:**
 - **Location:** East US region
-- **VM Sizes:** Standard_A2_v2 (cost-optimized SKUs)
+- **VM Sizes:** Standard_B2s (Gen2-compatible, cost-optimized)
 - **VNet CIDR:** 10.10.0.0/16
 - **Subnets:**
   - App tier: 10.10.1.0/24
   - Database tier: 10.10.2.0/24
   - Management tier: 10.10.3.0/24
 - **Resource Group:** `rg-network-dev`
+- **VMs:** Linux (Ubuntu 22.04 LTS Gen2) and Windows Server 2022 (Gen2)
 - **Tagging:** Automatically tagged as "Development" environment
+- **State Backend:** Azure Storage Account `sttfstatedevpkc01` in remote backend
 
 ### Production Environment (`prod/`)
 
@@ -64,16 +66,22 @@ Contains the primary resource definitions for each environment:
 - **Configuration:** Network topology, subnet definitions, and security rules
 
 ### `provider.tf`
-Defines the Terraform provider configuration:
+Defines the Terraform provider configuration and backend setup:
 - **Provider:** Azure Resource Manager (azurerm)
 - **Version:** ~> 3.0 (allows patch updates within version 3.x)
 - **Features:** Empty block allows default feature behavior
+- **Backend:** Azure Storage (remote state management)
+  - Storage Account: `sttfstatedevpkc01`
+  - Container: `tfstate`
+  - Dev State Key: `env:dev.tfstate`
+  - Resource Group: `rg-network-dev`
+  - **Status:** Configured and ready for state migration
 
 ### `variables.tf`
 Declares input variables used throughout the configuration:
 - `location` - Azure region (default: eastus)
-- `linux_vm_size` - Compute SKU for Linux VMs
-- `windows_vm_size` - Compute SKU for Windows VMs
+- `linux_vm_size` - Compute SKU for Linux VMs (default: Standard_B2s)
+- `windows_vm_size` - Compute SKU for Windows VMs (default: Standard_B2s)
 - `vm_admin_username` - Basic VM admin user
 - `vm_admin_password` - Protected sensitive credential
 
@@ -160,18 +168,21 @@ terraform destroy
 
 ### Credentials & Sensitive Data
 - **Passwords:** Change `vm_admin_password` from default placeholder before deploying
-- **State Files:** Contains sensitive information - store securely, never commit
-- **Backend:** Consider using remote state (Azure Storage) for team environments
+- **State Files:** Stored in Azure Storage (encrypted), never committed to git
+- **Backend:** Uses managed identity for secure Azure authentication
+- **Secrets:** Never hardcode secrets - use Azure Key Vault for production
+
+### Remote State Backend
+- **Always use remote state** for team environments and production
+- **Never commit local state files** - .gitignore prevents this
+- **Backup state regularly** using `terraform state pull` for disaster recovery
+- **Limit access** to storage account using Azure RBAC
 
 ### Environment Separation
 - **Dev Environment:** Lower costs, experimental features acceptable
 - **Prod Environment:** Stricter controls, higher resource standards
 - **Isolation:** Each environment has separate resource groups and networking
-
-### Network Design
-- **Subnet Separation:** Logical tiers (app, db, management) are isolated
-- **Service Endpoints:** Storage and KeyVault endpoints configured for service access
-- **Security Groups:** NSGs configured to restrict traffic patterns
+- **State Isolation:** Dev and Prod share storage account but use separate state files
 
 ## 📝 Modifying Configurations
 
@@ -230,9 +241,31 @@ Resources follow Azure naming standards:
 
 ## 🔄 Terraform State Management
 
+### Remote State Backend (Azure Storage)
+
+Your Terraform state is managed remotely in Azure Storage for team collaboration and safety:
+
+**Storage Details:**
+- **Account:** `sttfstatedevpkc01` (in `rg-network-dev` resource group)
+- **Container:** `tfstate`
+- **Dev State:** `env:dev.tfstate` (imported and ready)
+- **Region:** East US
+
+**Status:**
+- ✅ Storage account created and imported
+- ✅ Storage container created and imported
+- ⏳ Backend migration ready (run `terraform init -migrate-state` after applying VMs)
+
+**Benefits:**
+- ✅ Team collaboration - multiple users can access same state
+- ✅ Security - state encrypted at rest in Azure
+- ✅ Backup & Recovery - Azure Storage handles redundancy
+- ✅ No local conflicts - eliminates merge conflicts
+- ✅ Audit trail - all changes logged in Azure
+
 ### State File Location
-- **Local State:** Stored in `terraform.tfstate` within each environment directory
-- **Production Recommendation:** Migrate to Azure Storage backend for collaboration
+- **Remote:** Azure Storage Blob (`sttfstatedevpkc01/tfstate/`)
+- **Local Cache:** `.terraform/terraform.tfstate` (temporary, don't commit)
 
 ### Protecting State
 ```bash
@@ -241,9 +274,90 @@ terraform show -no-color | grep -v password
 
 # List all managed resources
 terraform state list
+
+# Inspect specific resource
+terraform state show azurerm_resource_group.rg
 ```
 
-## 🛠️ Troubleshooting
+## � Current Deployment Status (April 2026)
+
+### ✅ Completed
+
+**Infrastructure Created:**
+- ✅ Resource Group (`rg-network-dev`) - imported
+- ✅ Virtual Network (`vnet-dev-eastus`)
+- ✅ 3 Subnets: app (10.10.1.0/24), db (10.10.2.0/24), management (10.10.3.0/24)
+- ✅ Network Security Group (`nsg-dev-vnet-dev-eastus`) with 3 security rules
+- ✅ Storage Account (`sttfstatedevpkc01`) for Terraform state
+- ✅ Storage Container (`tfstate`) for remote state storage
+- ✅ Network Interfaces for VMs
+
+**Issues Resolved:**
+- ✅ Fixed `for_each` loop in vnet module subnet-NSG associations (removed problematic `if contains()` condition)
+- ✅ Fixed `for_each` loop in vnet module subnet-route table associations
+- ✅ Fixed VM hypervisor generation mismatch by updating VM sizes to `Standard_B2s` (Gen2-compatible)
+- ✅ Changed VM images to Gen2 (Ubuntu 22.04 LTS Gen2, Windows Server 2022 Gen2)
+- ✅ Imported existing Resource Group into Terraform state
+- ✅ Imported Storage Account and Container into Terraform state
+
+### 🔄 In Progress / Pending
+
+**Resources Being Created:**
+- ⏳ Linux Virtual Machine (`vm-linux-dev-01`) - Ubuntu 22.04 LTS Gen2, Standard_B2s
+- ⏳ Windows Virtual Machine (`vm-windows-dev-01`) - Windows Server 2022 Gen2, Standard_B2s
+
+**Configuration Tasks:**
+- ⏳ VM creation completion (typically 5-15 minutes)
+- ⏳ Remote state backend migration via `terraform init -migrate-state`
+
+### 📊 Resource Summary Table
+
+| Component | Resource Name | Status | Details |
+|---|---|---|---|
+| **Compute** | vm-linux-dev-01 | ⏳ Creating | Ubuntu 22.04 LTS Gen2, Standard_B2s |
+| | vm-windows-dev-01 | ⏳ Creating | Windows Server 2022 Gen2, Standard_B2s |
+| **Networking** | vnet-dev-eastus | ✅ Created | CIDR: 10.10.0.0/16 |
+| | snet-app-dev-eastus | ✅ Created | CIDR: 10.10.1.0/24 |
+| | snet-db-dev-eastus | ✅ Created | CIDR: 10.10.2.0/24 |
+| | snet-mgmt-dev-eastus | ✅ Created | CIDR: 10.10.3.0/24 |
+| | nic-linux-dev-01 | ✅ Created | Connected to app subnet |
+| | nic-windows-dev-01 | ✅ Created | Connected to app subnet |
+| | nsg-dev-vnet-dev-eastus | ✅ Created | 3 inbound rules configured |
+| **Storage** | sttfstatedevpkc01 | ✅ Created | Terraform state backend |
+| | tfstate (container) | ✅ Created | State file location |
+| **Management** | rg-network-dev | ✅ Imported | Resource Group |
+
+### ⏭️ Next Steps
+
+1. **Monitor VM creation:**
+   ```bash
+   cd terraform/environments/dev
+   terraform state list  # Check for VM resources
+   ```
+
+2. **Once VMs are created, migrate state to backend:**
+   ```bash
+   terraform init -migrate-state
+   ```
+   When prompted, type `yes` to confirm the migration.
+
+3. **Verify successful migration:**
+   ```bash
+   terraform plan  # Should show no changes
+   terraform state list | grep vm  # VMs should appear
+   ```
+
+4. **Configure backend in provider.tf** (if not already done):
+   ```hcl
+   backend "azurerm" {
+     resource_group_name  = "rg-network-dev"
+     storage_account_name = "sttfstatedevpkc01"
+     container_name       = "tfstate"
+     key                  = "env:dev.tfstate"
+   }
+   ```
+
+## �🛠️ Troubleshooting
 
 ### Connection Issues
 ```bash

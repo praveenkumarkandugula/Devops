@@ -167,3 +167,22 @@ resource "azurerm_network_interface" "windows_vm_nic" {
 
   tags = local.tags
 }
+
+# Storage account for Terraform state management.
+resource "azurerm_storage_account" "tfstate" {
+  name                     = "sttfstate${local.environment}pkc01"
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = var.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  min_tls_version          = "TLS1_2"
+
+  tags = local.tags
+}
+
+# Storage container for Terraform state files.
+resource "azurerm_storage_container" "tfstate" {
+  name                  = "tfstate"
+  storage_account_name  = azurerm_storage_account.tfstate.name
+  container_access_type = "private"
+}

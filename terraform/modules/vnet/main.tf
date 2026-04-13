@@ -81,7 +81,7 @@ resource "azurerm_network_security_rule" "this" {
 
 # Associates the NSG only to the computed target subnets.
 resource "azurerm_subnet_network_security_group_association" "this" {
-  for_each = { for key in local.nsg_target_subnet_keys : key => azurerm_subnet.this[key] if contains(keys(azurerm_subnet.this), key) }
+  for_each = { for key in local.nsg_target_subnet_keys : key => azurerm_subnet.this[key] }
 
   subnet_id                 = each.value.id
   network_security_group_id = azurerm_network_security_group.this[0].id
@@ -110,7 +110,7 @@ resource "azurerm_route" "this" {
 
 # Associates the route table only to the computed target subnets.
 resource "azurerm_subnet_route_table_association" "this" {
-  for_each = { for key in local.route_table_target_subnet_keys : key => azurerm_subnet.this[key] if contains(keys(azurerm_subnet.this), key) }
+  for_each = { for key in local.route_table_target_subnet_keys : key => azurerm_subnet.this[key] }
 
   subnet_id      = each.value.id
   route_table_id = azurerm_route_table.this[0].id
